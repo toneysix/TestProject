@@ -5,13 +5,30 @@ using Application.BusinessInterface;
 using Application.BusinessLogic;
 using Application.DB;
 
+/// <summary>
+/// Пространство имён модели
+/// </summary>
 namespace Application.Model
 {
-    public class DBWriter : AbstractThreadTask<MyTask.FileHashSumInfo>
-    {      
+    /// <summary>
+    /// Класс, реализующий запись в БД обработанных файлов
+    /// </summary>
+    public class DBWriter : AbstractThreadTask<List<MyTask.FileHashSumInfo>>
+    {
+        #region Поля класса
+
+        /// <summary>Количество вставленных (обновленных строк)</summary>
         public uint InsertedFilesCount = 0;
+        /// <summary>Дескриптор БД</summary>
         private OracleDatabase dbHandle;
 
+        #endregion
+
+        #region Иниацилазция/Реализация
+
+        /// <summary>Конструктор класса</summary>
+        /// <param name="db">Дескриптор базы данных</param>
+        /// <param name="fileHashSumInfoSet">Ссылка на список, откуда будут вставляться (обновляться) кортежи в БД</param>
         public DBWriter(OracleDatabase db, List<MyTask.FileHashSumInfo> fileHashSumInfoSet)
         {            
             dbHandle = db;
@@ -20,6 +37,7 @@ namespace Application.Model
             start();
         }
 
+        /// <summary>Метод, создающий отношение в БД, куда будут вставляться кортежи обработанных файлов</summary>
         private void initDB()
         {
             int resultCode = dbHandle.executeNonQuery("create table FileInfo (FullPath VARCHAR2(260) PRIMARY KEY NOT NULL, MD5Hash VARCHAR2(100) NOT NULL)");
@@ -27,6 +45,13 @@ namespace Application.Model
                 throw new Exception(String.Format("Ошибка при иницилазиации базы данных: невозможно создать таблицу, код ошибки ORA-{0}", resultCode));
         }
 
+        #endregion
+
+        #region Методы, реализующий функционал класса
+
+        /// <summary>Метод, осуществляющий вставку (обновление) строки в БД</summary>
+        /// <param name="fileHashSumInfo">Структура, специфицирующая результат обработки файла для вставки (обновления) в БД</param>
+        /// <returns>Возвращает true в случае успешной вставки (обновления) кортежа</returns>
         public bool writeFileInfo(MyTask.FileHashSumInfo fileHashSumInfo)
         {
             int resultCode = dbHandle.simpleInsertOrUpdate("FileInfo", "FullPath", new Dictionary<string, object>() { { "FullPath", fileHashSumInfo.Path },
@@ -41,6 +66,8 @@ namespace Application.Model
             return false;
         }
 
+        /// <summary>Процедура, получающая задания на добавление в отношение БД кортежей результатов обработанных файлов</summary>
+        /// <param name="_params">Передаваемые параметры</param>
         protected override void backgroundWorker(object _params)
         {
             int taskCount = 0;
@@ -64,5 +91,7 @@ namespace Application.Model
 
             stopSignal = false;
         }
+
+        #endregion
     }
 }
