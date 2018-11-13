@@ -10,99 +10,6 @@ using System.Collections;
 namespace Application.Utils
 {
     /// <summary>
-    /// Класс по работе с директориями, реализуйющий перебор всех файлов в указанном каталоге, включая подкаталоги
-    /// </summary>
-    public class DirectoryHelper : IEnumerable, IEnumerator
-    {
-        #region Поля класса
-
-        /// <summary>Текущий индекс перебираемого каталога</summary>
-        private int currentFolderIndex;
-        /// <summary>Текущие файлы, извлеченные из текущего перебираемого каталога/summary>
-        private List<string> currentFiles;
-        /// <summary>Список директорий для перебора файлов</summary>
-        private List<string> currentFolders = new List<string>();
-
-        #endregion
-
-        #region Инициализация, реализация
-
-        /// <summary>
-        /// Конструктор класса
-        /// </summary>
-        /// <param name="folderPath">Полный путь к папке для выборки всех файлов</param>
-        public DirectoryHelper(string folderPath)
-        {
-            if(Directory.Exists(folderPath))
-            {
-                currentFolders.Add(folderPath);
-                currentFolderIndex = 0;
-                currentFiles = new List<string>();
-                return;
-            }
-
-            throw new Exception("Указанная директория не существует");
-        }
-
-        #endregion
-
-        #region Методы, реализующие функционал класса (IEnumerable, IEnumerator)
-
-        /// <summary>
-        /// Получает перечислитель (реализация метода IEnumerable)
-        /// </summary>
-        public IEnumerator GetEnumerator()
-        {
-            return this;
-        }
-
-        /// <summary>
-        /// Сдвигает итерацию перечислителя на следующуий каталог (реализация метода IEnumerator)
-        /// </summary>
-        public bool MoveNext()
-        {
-            currentFiles.Clear();
-     
-            if (currentFolders.Count <= currentFolderIndex)
-            {          
-                Reset();
-                return false;
-            }
-
-            currentFiles.AddRange(Directory.GetFiles(currentFolders[currentFolderIndex]));   
-            currentFolders.AddRange(Directory.GetDirectories(currentFolders[currentFolderIndex]));
-            currentFolderIndex++;
-            if (currentFiles.Count == 0)
-                MoveNext();
-
-            return true;
-        }
-
-        /// <summary>
-        /// Сбрасывает итерацию файлов каталогов (реализация метода IEnumerator)
-        /// </summary>
-        public void Reset()
-        {
-            currentFolders.RemoveRange(1, currentFolders.Count - 1);
-            currentFolderIndex = 0;
-            currentFiles.Clear();
-        }
-
-        /// <summary>
-        /// Получает список файлов текущего перебираемого каталога (реализация метода IEnumerator)
-        /// </summary>
-        public object Current
-        {
-            get
-            {
-                return currentFiles.ToArray();
-            }
-        }
-
-        #endregion
-    }
-
-    /// <summary>
     /// Класс, реализующий получение хеш-сумм (с файлов)
     /// </summary>
     public class MD5Hash
@@ -154,14 +61,6 @@ namespace Application.Utils
         public MD5Hash()
         {
             _MD5 = MD5.Create();
-        }
-
-        /// <summary>
-        /// Деструктор класса, высвобождающий неуправляемый ресурс
-        /// </summary>
-        ~MD5Hash()
-        {
-            _MD5.Dispose();
         }
 
         #endregion

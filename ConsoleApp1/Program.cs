@@ -32,7 +32,7 @@ namespace Application
                 {
                     try
                     {
-                        MyTask myTask = new MyTask(p[(int)CommandLineInfo.COMMAND_PARAM_INDEX], dbConnData);
+                        new MyTask(p[(int)CommandLineInfo.COMMAND_PARAM_INDEX], dbConnData).run();
                     }
                     catch (Exception e)
                     {
@@ -46,9 +46,6 @@ namespace Application
 
                     Console.WriteLine("Параметры подключения БД успешно изменены");
                 }
-
-                continue;
-
             }
         }
     }

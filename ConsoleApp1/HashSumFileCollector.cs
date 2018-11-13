@@ -2,7 +2,9 @@
 using System;
 using System.IO;
 using System.Collections.Generic;
+using System.Threading;
 using Application.BusinessInterface;
+using Application.Model;
 
 /// <summary>
 /// Пространство имён бизнес логики
@@ -16,37 +18,54 @@ namespace Application.BusinessLogic
     {
         #region Поля класса
 
+        /// <summary>Дескриптор БД</summary>
+        private DBTaskWriter dBWriterHandle;
         /// <summary>Указывает какое количество файлов должно быть обработано для передачи результатов их обработки в БД на запись</summary>
-        private uint portionProcFile;
-        /// <summary>Путь к директории для обработки файлов</summary>
-        private string path;
+        private readonly uint portionProcFile;
         /// <summary>Количество обработанных файлов</summary>
         public int ProcessedFilesCount = 0;
+        /// <summary>Список файлов, для которых требуется произвести обработку</summary>
+        private List<string> filesToProcess;
 
         #endregion
 
         #region Инициализация/Реализация
 
         /// <summary>Конструктор класса</summary>
-        /// <param name="path">Полный путь к директории</param>
+        /// <param name="dBWriterHandle">Дескриптор БД для логирования ошибок</param>
         /// <param name="fileHashSumInfoSet">Ссылка на список, в который будут помещаться данные об обработанных файлах</param>
         /// <param name="portionProcFile">Необязательный параметр, указывающий какое количество файлов должно быть обработано для передачи результатов их обработки в БД на запись</param>
-        public HashSumFileCollector(string path, List<MyTask.FileHashSumInfo> fileHashSumInfoSet, uint portionProcFile = 10)
-        {         
-            if (Directory.Exists(path) || File.Exists(path))
-            {
-                this.path = path;   
-                this.portionProcFile = portionProcFile;
-                tasks = fileHashSumInfoSet;
-                start();
-            }
-            else
-                throw new Exception("Файл или директория не существует");
+        public HashSumFileCollector(DBTaskWriter dBWriterHandle, List<MyTask.FileHashSumInfo> fileHashSumInfoSet, uint portionProcFile = 10)
+        {
+           this.dBWriterHandle = dBWriterHandle;
+           this.portionProcFile = portionProcFile;
+           filesToProcess = new List<string>();
+           tasks = fileHashSumInfoSet;
         }
 
         #endregion
 
         #region Методы, реализующие функционал класса
+
+        /// <summary>Метод, осуществляющий постановку на обработку файла</summary>
+        /// <param name="filePath">Полный путь к файлу для его обработки</param>
+        public void addFileToProcess(string filePath)
+        {
+            lock (filesToProcess)
+            {
+                filesToProcess.Add(filePath);
+            }
+        }
+
+        /// <summary>Метод, осуществляющий постановку на обработку файлов</summary>
+        /// <param name="filePath">Список файлов с полными путями для обработки</param>
+        public void addFileToProcess(List<string> filesPath)
+        {
+            lock (filesToProcess)
+            {
+                filesToProcess.AddRange(filesPath);
+            }
+        }
 
         /// <summary>Метод, осуществляющий передачу списка обработанных файлов на запись в БД</summary>
         /// <param name="from">Список обработанных файлов для передачи на запись в БД</param>
@@ -70,33 +89,47 @@ namespace Application.BusinessLogic
         protected override void backgroundWorker(object _params)
         {
             MD5Hash md5Hash = new MD5Hash();
-            string hash;
+            string hash = "";
             List<MyTask.FileHashSumInfo> tempFileHashSumInfoSet = new List<MyTask.FileHashSumInfo>();
+            List<string> tempFilesToProcess = new List<string>();
+            int filesCountToProcess = 0;
 
-            try
+            while ((filesCountToProcess = filesToProcess.Count) > 0 || !stopSignal)
             {
-                DirectoryHelper dirHelper = new DirectoryHelper(path);
-                foreach(string[] files in dirHelper)
+                if(filesCountToProcess > 0)
                 {
-                    foreach(string file in files)
+                    lock(filesToProcess)
                     {
-                        hash = md5Hash.fileHashSum(file).toString();
-                        tempFileHashSumInfoSet.Add(new MyTask.FileHashSumInfo() { Path = file, Hash = hash });
-                        ProcessedFilesCount++;
+                        tempFilesToProcess = new List<string>(filesToProcess.AsReadOnly());
+                        filesToProcess.Clear();
+                    }
 
-                        if (portionProcFile == tempFileHashSumInfoSet.Count)
+                    foreach (string file in tempFilesToProcess)
+                    {
+                        try
                         {
-                            writeIntoDb(tempFileHashSumInfoSet);
-                            tempFileHashSumInfoSet.Clear();
+                            hash = md5Hash.fileHashSum(file).toString();
+
+                            tempFileHashSumInfoSet.Add(new MyTask.FileHashSumInfo() { Path = file, Hash = hash });
+                            ProcessedFilesCount++;
+
+                            if (portionProcFile == tempFileHashSumInfoSet.Count)
+                            {
+                                writeIntoDb(tempFileHashSumInfoSet);
+                                tempFileHashSumInfoSet.Clear();
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine(ex.Message);
+                            dBWriterHandle.writeLogInfo(ex.Message);
                         }
                     }
-                }     
+                }          
+                
+                Thread.Sleep(150);
             }
-            catch(Exception ex)
-            {
-                Console.WriteLine(ex.Message);
-            }
-
+ 
             writeIntoDb(tempFileHashSumInfoSet);
         }
 

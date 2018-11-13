@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using Application.Model;
 using Application.DB;
 
@@ -13,6 +14,23 @@ namespace Application.BusinessLogic
     /// </summary>
     public class MyTask
     {
+        #region Поля класса
+
+        /// <summary>Путь к директории для обработки файлов</summary>
+        private readonly string path;
+        /// <summary>Список обработанных файлов и поставленных в поток на добавление в БД</summary>
+        private List<FileHashSumInfo> FileHashSumInfoSet = new List<FileHashSumInfo>();
+        /// <summary>Дескриптор БД</summary>
+        private OracleDatabase dbHandle;
+        /// <summary>Дескриптор модуля записи данных в БД</summary>
+        private DBTaskWriter dbWwriterHandle;
+        /// <summary>Дескриптор модуля обработки файлов (получение хеш-сумм)</summary>
+        private HashSumFileCollector hashSumFileCollectorHandle;
+
+        #endregion
+
+        #region Вложенные структуры/классы
+
         /// <summary>
         /// Структура, хранящая информацию о файле (полный путь, хеш-сумму)
         /// </summary>
@@ -24,38 +42,75 @@ namespace Application.BusinessLogic
             public string Hash;
         }
 
-        /// <summary>Список обработанных файлов и поставленных в поток на добавление в БД</summary>
-        public List<FileHashSumInfo> FileHashSumInfoSet = new List<FileHashSumInfo>();
+        #endregion
+
+        #region Иницилазиация/Реализация
 
         /// <summary>Конструктор класса</summary>
         /// <param name="path">Полный путь к каталогу для обработки файлов и записи в БД</param>
         /// <param name="dbConnData">Сведения о соединении с БД (кортеж: host, port, sid, user, password)</param>
         public MyTask(string path, Tuple<string, int, string, string, string> dbConnData)
-        {         
-            int currentTick = System.Environment.TickCount;
-            Console.WriteLine("Запуск модуля сохранения результатов в БД");
-            DBWriter dbWriter;
+        {
+            this.path = path;
+            Console.WriteLine("Инициализация модуля сохранения результатов в БД");
             try
             {
-                OracleDatabase dbHandle = new OracleDatabase(dbConnData.Item1, dbConnData.Item2, dbConnData.Item3, dbConnData.Item4, dbConnData.Item5);
-                dbWriter = new DBWriter(dbHandle, FileHashSumInfoSet);
+                dbHandle = new OracleDatabase(dbConnData.Item1, dbConnData.Item2, dbConnData.Item3, dbConnData.Item4, dbConnData.Item5);
+                dbWwriterHandle = new DBTaskWriter(dbHandle, FileHashSumInfoSet);
             }
             catch (Exception ex)
             {
-                Console.WriteLine("Ошибка запуска модуля сохранения результатов в БД");
+                Console.WriteLine("Ошибка инициализации модуля сохранения результатов в БД");
+                dbHandle.Dispose();
                 throw new Exception(ex.Message);
             }
             
-            Console.WriteLine("Запуск модуля получения хеш-сумм");
-            HashSumFileCollector hashSumFileCollector = new HashSumFileCollector(path, FileHashSumInfoSet);
-
-            hashSumFileCollector.waitForTask();
-            Console.WriteLine("Все файлы и папки обработаны, всего файлов обработано: {0}, ожидаем завершения работы с БД", hashSumFileCollector.ProcessedFilesCount);
-
-            dbWriter.requestStop();
-            dbWriter.waitForTask();
-            Console.WriteLine("Работа с БД закончена, вставлено строк {0}", dbWriter.InsertedFilesCount);
-            Console.WriteLine("Время выполнения задания (мс): {0}", System.Environment.TickCount - currentTick);
+            Console.WriteLine("Инициализация модуля получения хеш-сумм");
+            hashSumFileCollectorHandle = new HashSumFileCollector(dbWwriterHandle, FileHashSumInfoSet);       
         }
+
+        #endregion
+
+        #region Методы, реализующие функцию класса
+
+        /// <summary>Метод, запускающий выполнение задачи: получение хеш-сумм файлов и запись результатов в БД</summary>
+        public void run()
+        {
+            int currentTick = System.Environment.TickCount;
+
+            Console.WriteLine("Запуск модуля получения хеш-сумм");
+            hashSumFileCollectorHandle.start();
+            Console.WriteLine("Запуск модуля сохранения результатов в БД");
+            dbWwriterHandle.start();
+
+            string[] files = { };
+            try
+            {
+                files = Directory.GetFiles(path, "*.*", SearchOption.AllDirectories);
+
+                foreach (string file in files)
+                {
+                    hashSumFileCollectorHandle.addFileToProcess(file);
+                }
+
+                hashSumFileCollectorHandle.requestStop();
+                hashSumFileCollectorHandle.waitForTask();
+                Console.WriteLine("Все файлы и папки обработаны, всего файлов обработано: {0}, ожидаем завершения работы с БД", hashSumFileCollectorHandle.ProcessedFilesCount);
+
+                dbWwriterHandle.requestStop();
+                dbWwriterHandle.waitForTask();
+                dbHandle.Dispose();
+
+                Console.WriteLine("Работа с БД закончена, вставлено строк {0}", dbWwriterHandle.InsertedFilesCount);
+                Console.WriteLine("Время выполнения задания (мс): {0}", System.Environment.TickCount - currentTick);
+            }
+            catch(Exception ex)
+            {
+                dbWwriterHandle.writeLogInfo(ex.Message);
+                Console.WriteLine(ex.Message);
+            }
+        }
+
+        #endregion
     }
 }

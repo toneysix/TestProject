@@ -47,7 +47,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="AbstractThreadTask.cs" />
-    <Compile Include="DBWriter.cs" />
+    <Compile Include="DBTaskWriter.cs" />
     <Compile Include="HashSumFileCollector.cs" />
     <Compile Include="MyTask.cs" />
     <Compile Include="OracleDatabase.cs" />

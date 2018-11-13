@@ -13,7 +13,7 @@ namespace Application.BusinessInterface
     public abstract class AbstractThreadTask<T>
     {
         /// <summary>Дескриптор потока</summary>
-        protected Thread thread;
+        private Thread thread;
         /// <summary>Ссылка на связанный член класса, через который происходит взаимодействие между другими задачами</summary>
         protected T tasks;
         /// <summary>Флаг, сигнализирующий о мануальном запросе на остановку задачного потока</summary>
@@ -31,7 +31,7 @@ namespace Application.BusinessInterface
 
         /// <summary>Метод, запускающий задачный поток</summary>
         /// <returns>Возвращает true, если задачный поток был успешно запущен и false, если поток находится в состоянии работы</returns>
-        protected bool start()
+        public bool start()
         {
             if (thread != null && thread.IsAlive)
                 return false;
