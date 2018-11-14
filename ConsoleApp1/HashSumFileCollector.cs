@@ -67,6 +67,16 @@ namespace Application.BusinessLogic
             }
         }
 
+        /// <summary>Метод, осуществляющий постановку на обработку файлов</summary>
+        /// <param name="filePath">Массив файлов с полными путями для обработки</param>
+        public void addFileToProcess(string[] filesPath)
+        {
+            lock (filesToProcess)
+            {
+                filesToProcess.AddRange(filesPath);
+            }
+        }
+
         /// <summary>Метод, осуществляющий передачу списка обработанных файлов на запись в БД</summary>
         /// <param name="from">Список обработанных файлов для передачи на запись в БД</param>
         /// <remarks>Предполагается, что передача в БД списка осуществляется через общую сущность</remarks>

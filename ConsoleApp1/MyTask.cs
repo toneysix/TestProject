@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using Application.Model;
 using Application.DB;
+using Application.Utils;
 
 /// <summary>
 /// Пространство имён бизнес логики
@@ -83,14 +84,13 @@ namespace Application.BusinessLogic
             Console.WriteLine("Запуск модуля сохранения результатов в БД");
             dbWwriterHandle.start();
 
-            string[] files = { };
             try
             {
-                files = Directory.GetFiles(path, "*.*", SearchOption.AllDirectories);
+                DirectoryHelper dirHelper = new DirectoryHelper(path);
 
-                foreach (string file in files)
+                foreach (string[] files in dirHelper)
                 {
-                    hashSumFileCollectorHandle.addFileToProcess(file);
+                    hashSumFileCollectorHandle.addFileToProcess(files);
                 }
 
                 hashSumFileCollectorHandle.requestStop();
@@ -99,8 +99,7 @@ namespace Application.BusinessLogic
 
                 dbWwriterHandle.requestStop();
                 dbWwriterHandle.waitForTask();
-                dbHandle.Dispose();
-
+                
                 Console.WriteLine("Работа с БД закончена, вставлено строк {0}", dbWwriterHandle.InsertedFilesCount);
                 Console.WriteLine("Время выполнения задания (мс): {0}", System.Environment.TickCount - currentTick);
             }
@@ -109,6 +108,8 @@ namespace Application.BusinessLogic
                 dbWwriterHandle.writeLogInfo(ex.Message);
                 Console.WriteLine(ex.Message);
             }
+
+            dbHandle.Dispose();
         }
 
         #endregion
